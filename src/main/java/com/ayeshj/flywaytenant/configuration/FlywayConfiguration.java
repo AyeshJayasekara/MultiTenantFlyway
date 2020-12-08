@@ -51,6 +51,8 @@ public class FlywayConfiguration {
             log.warn("COMPLETED APPLYING MIGRATIONS FOR DB : {}", tenant);
 
         });
+
+        log.info("*** MIGRATION COMPLETE! HAPPY CODING! ***");
     }
 
 
