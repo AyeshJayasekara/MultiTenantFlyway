@@ -1,0 +1,1 @@
+CREATE TABLE sample_table_db3 (id varchar(100));
