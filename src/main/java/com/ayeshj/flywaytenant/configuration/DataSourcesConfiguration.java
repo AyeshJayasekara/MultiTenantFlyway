@@ -8,10 +8,12 @@ import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 
 import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * Configuration class for setting up data sources according to given configuration properties
@@ -27,6 +29,12 @@ public class DataSourcesConfiguration {
     private final PropertyBasedDatasourceConfiguration datasourceConfiguration;
     private final ApplicationContext applicationContext;
 
+    /**
+     * Spting autowired constructor
+     *
+     * @param datasourceConfiguration Property model
+     * @param appContext              Application context of the running application
+     */
     @Autowired
     public DataSourcesConfiguration(PropertyBasedDatasourceConfiguration datasourceConfiguration,
                                     ApplicationContext appContext) {
@@ -36,6 +44,11 @@ public class DataSourcesConfiguration {
     }
 
 
+    /**
+     * Registers a map of datasource(s) mapped to tenant name as a bean
+     *
+     * @return Configured datasource map bean
+     */
     @Bean("datasourceConfigurationMap")
     public Map<String, DataSource> datasourceConfigurationMap() {
 
@@ -47,6 +60,51 @@ public class DataSourcesConfiguration {
         return configure();
     }
 
+    /**
+     * SQL root directory configuration properties as spring bean
+     *
+     * @return Properties object with configured SQL directories if provided on application.properties as a bean
+     */
+    @Bean("sqlDirectoryProperties")
+    @DependsOn("datasourceConfigurationMap")
+    public Properties sqlDirectoryProperties() {
+        Properties properties = new Properties();
+        datasourceConfiguration.getProperty().forEach(tenant -> {
+
+            String path = tenant.getSqlRepositoryPath();
+            if (path != null && !path.isEmpty()) {
+                properties.put(tenant.getDataSourceName(), path);
+            }
+        });
+
+        return properties;
+    }
+
+    /**
+     * Placeholder file path configuration properties as a spring bean
+     *
+     * @return Configuration bean
+     */
+    @Bean("placeholderProperties")
+    @DependsOn("datasourceConfigurationMap")
+    public Properties placeholderProperties() {
+        Properties properties = new Properties();
+        datasourceConfiguration.getProperty().forEach(tenant -> {
+
+            String path = tenant.getPlaceholderPropertiesPath();
+            if (path != null && !path.isEmpty()) {
+                properties.put(tenant.getDataSourceName(), path);
+            }
+        });
+
+        return properties;
+    }
+
+    /**
+     * Method for datasource configuration from properties
+     *
+     * @return Map of configured datasource(s)
+     */
     private Map<String, DataSource> configure() {
         HashMap<String, DataSource> map = new HashMap<>();
 
@@ -54,10 +112,15 @@ public class DataSourcesConfiguration {
                 .forEach(datasourcePropertyModel ->
                         map.put(datasourcePropertyModel.getDataSourceName(), configure(datasourcePropertyModel)));
 
-
         return map;
     }
 
+    /**
+     * Method to configure and set up datasource
+     *
+     * @param datasourcePropertyModel Datasource properties model
+     * @return Configured datasource
+     */
     private DataSource configure(DatasourcePropertyModel datasourcePropertyModel) {
         DataSourceBuilder dataSourceBuilder = DataSourceBuilder.create();
         dataSourceBuilder.driverClassName(datasourcePropertyModel.getDriverClassName());
@@ -70,6 +133,9 @@ public class DataSourcesConfiguration {
         return dataSourceBuilder.build();
     }
 
+    /**
+     * Method to shutdown Spring Application safely
+     */
     private void safelyShutdown() {
         log.warn("ATTEMPTING TO SHUTDOWN APPLICATION SAFELY. BYE!");
         System.exit(SpringApplication.exit(applicationContext, () -> 1));

@@ -6,7 +6,6 @@ import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
 import org.springframework.core.io.ClassPathResource;
 
 import javax.annotation.PostConstruct;
@@ -33,24 +32,28 @@ import java.util.Properties;
 public class FlywayConfiguration {
 
     private final Map<String, DataSource> dataSourceMap;
-    private final Environment environment;
+    private final Properties sqlRepositoryProperties;
+    private final Properties placeholderProperties;
     private static final String DEFAULT_SQL_ROOT_DIRECTORY = "db/migration/";
 
 
     /**
      * Constructor for Spring DI with required dependencies
      *
-     * @param dataSourceMap Map of datasource configured and exposed as a bean.
-     * @param environment   Spring application environment
+     * @param dataSourceMap           Map of datasource configured and exposed as a bean.
+     * @param sqlRepositoryProperties Properties for paths containing SQL statement
+     * @param placeholderProperties   Properties for placeholder properties file
      */
     @Autowired
     FlywayConfiguration(@Qualifier("datasourceConfigurationMap") Map<String, DataSource> dataSourceMap,
-                        Environment environment) {
+                        @Qualifier("sqlDirectoryProperties") Properties sqlRepositoryProperties,
+                        @Qualifier("placeholderProperties") Properties placeholderProperties) {
         this.dataSourceMap = dataSourceMap;
-        this.environment = environment;
+        this.sqlRepositoryProperties = sqlRepositoryProperties;
+        this.placeholderProperties = placeholderProperties;
+
         log.info("DATASOURCE(S) CONFIGURED SUCCESSFULLY!");
         log.info("STARTING MIGRATION...");
-
 
     }
 
@@ -62,12 +65,10 @@ public class FlywayConfiguration {
     @PostConstruct
     public void migrate() {
 
-        String scriptLocation = environment.getProperty("migration.script.rootLocation", DEFAULT_SQL_ROOT_DIRECTORY);
-
         dataSourceMap.keySet().forEach(tenant -> {
 
             log.info("STARTING MIGRATION FOR DB : {}", tenant);
-            String tenantSQLRootDirectory = scriptLocation.concat(tenant);
+            String tenantSQLRootDirectory = getSQLRoot(tenant);
             log.info("SQL REPOSITORY LOCATED AT : {}", tenantSQLRootDirectory);
 
 
@@ -77,7 +78,14 @@ public class FlywayConfiguration {
                     .dataSource(dataSourceMap.get(tenant))
                     .schemas(tenant);
 
-            flywayConfiguration = configurePlaceholderReplacer(flywayConfiguration, tenantSQLRootDirectory);
+            String placeholderPath = getPlaceholderPath(tenant);
+
+            if (placeholderPath != null && !placeholderPath.isEmpty()) {
+                flywayConfiguration = configurePlaceholderReplacer(flywayConfiguration, placeholderPath);
+            } else {
+                log.warn("NO PLACEHOLDER CONFIGURATION FOUND. IGNORING FOR TENANT : {}", tenant);
+            }
+
             Flyway flyway = flywayConfiguration.load();
 
             log.warn("APPLYING MIGRATIONS FOR DB : {}", tenant);
@@ -90,21 +98,34 @@ public class FlywayConfiguration {
         log.info("*** MIGRATION COMPLETE! HAPPY CODING! ***");
     }
 
+    private String getSQLRoot(String tenant) {
+
+        String customRoot = sqlRepositoryProperties.getProperty(tenant);
+
+        if (customRoot == null || customRoot.isEmpty()) {
+            return DEFAULT_SQL_ROOT_DIRECTORY.concat(tenant);
+        } else {
+            return customRoot;
+        }
+    }
+
+    private String getPlaceholderPath(String tenant) {
+        return placeholderProperties.getProperty(tenant, null);
+    }
+
 
     /**
      * Method to configure placeholder replacements
      *
-     * @param flywayConfiguration    Flyway configurer instance
-     * @param tenantSQLRootDirectory Directory to look for properties file
+     * @param flywayConfiguration       Flyway configurer instance
+     * @param placeholderPropertiesPath Directory to look for properties file
      * @return Flyway configurer instance configured with placeholder replacer (if found)
      */
     FluentConfiguration configurePlaceholderReplacer(FluentConfiguration flywayConfiguration,
-                                                     String tenantSQLRootDirectory) {
+                                                     String placeholderPropertiesPath) {
 
 
-        String absoluteFilePath = tenantSQLRootDirectory.concat("/placeholder.properties");
-
-        try (InputStream inputStream = fetchStream(absoluteFilePath)) {
+        try (InputStream inputStream = fetchStream(placeholderPropertiesPath)) {
 
             Map<String, String> propertyMap = new HashMap<>();
             Properties properties = new Properties();
@@ -117,10 +138,10 @@ public class FlywayConfiguration {
             log.info("PLACEHOLDER PROPERTIES SUCCESSFULLY LOADED. TOTAL ENTRIES LOAD : {}", propertyMap.size());
 
         } catch (FileNotFoundException fileNotFoundException) {
-            log.warn("NO PLACEHOLDER FILE FOUND AT LOCATION : {}  <<< IGNORING PLACEHOLDER FILE >>>", absoluteFilePath);
+            log.warn("NO PLACEHOLDER FILE FOUND AT LOCATION : {}  <<< IGNORING PLACEHOLDER FILE >>>", placeholderPropertiesPath);
 
         } catch (IOException exception) {
-            log.error("UNABLE TO LOAD PLACEHOLDER PROPERTIES. FILE CAN NOT BE OPENED AT : {}", absoluteFilePath);
+            log.error("UNABLE TO LOAD PLACEHOLDER PROPERTIES. FILE CAN NOT BE OPENED AT : {}", placeholderPropertiesPath);
         }
 
         return flywayConfiguration;

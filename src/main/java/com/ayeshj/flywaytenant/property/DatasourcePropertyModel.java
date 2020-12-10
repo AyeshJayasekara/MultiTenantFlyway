@@ -18,4 +18,6 @@ public class DatasourcePropertyModel {
     private String driverClassName;
     private String name;
     private String dataSourceName;
+    private String sqlRepositoryPath;
+    private String placeholderPropertiesPath;
 }
