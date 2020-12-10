@@ -13,6 +13,13 @@ import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Configuration class for setting up data sources according to given configuration properties
+ *
+ * @author Ayesh Jayasekara
+ * @since Dec 2020
+ */
+
 @Configuration
 @Slf4j
 public class DataSourcesConfiguration {
@@ -30,9 +37,9 @@ public class DataSourcesConfiguration {
 
 
     @Bean("datasourceConfigurationMap")
-    public Map<String, DataSource> datasourceConfigurationMap(){
+    public Map<String, DataSource> datasourceConfigurationMap() {
 
-        if(datasourceConfiguration.getProperty() == null || datasourceConfiguration.getProperty().isEmpty()){
+        if (datasourceConfiguration.getProperty() == null || datasourceConfiguration.getProperty().isEmpty()) {
             log.error("NO DATASOURCE(S) COULD BE CONFIGURED! PLEASE MAKE SURE YOU HAVE CORRECT PROPERTIES SET!");
             safelyShutdown();
         }
@@ -40,7 +47,7 @@ public class DataSourcesConfiguration {
         return configure();
     }
 
-    private Map<String, DataSource> configure(){
+    private Map<String, DataSource> configure() {
         HashMap<String, DataSource> map = new HashMap<>();
 
         datasourceConfiguration.getProperty()
@@ -63,7 +70,7 @@ public class DataSourcesConfiguration {
         return dataSourceBuilder.build();
     }
 
-    private void safelyShutdown(){
+    private void safelyShutdown() {
         log.warn("ATTEMPTING TO SHUTDOWN APPLICATION SAFELY. BYE!");
         System.exit(SpringApplication.exit(applicationContext, () -> 1));
     }
